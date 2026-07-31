@@ -1,16 +1,30 @@
-# React + Vite
+# americandrm
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+## Supabase Setup
 
-Currently, two official plugins are available:
+This project now includes a configured Supabase client in [src/lib/supabase.js](./src/lib/supabase.js).
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Oxc](https://oxc.rs)
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/)
+Required environment variables:
 
-## React Compiler
+- `VITE_SUPABASE_URL`
+- `VITE_SUPABASE_ANON_KEY`
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
+Copy [.env.example](./.env.example) to `.env.local` or `.env` and fill in your project values:
 
-## Expanding the ESLint configuration
+```env
+VITE_SUPABASE_URL=https://your-project-ref.supabase.co
+VITE_SUPABASE_ANON_KEY=your-anon-public-key
+```
 
-If you are developing a production application, we recommend using TypeScript with type-aware lint rules enabled. Check out the [TS template](https://github.com/vitejs/vite/tree/main/packages/create-vite/template-react-ts) for information on how to integrate TypeScript and [`typescript-eslint`](https://typescript-eslint.io) in your project.
+Notes:
+
+- Keep these values in a local `.env` file and do not commit them.
+- The client is initialized lazily and stays inactive if the variables are missing.
+
+## Authentication Setup
+
+Authentication uses Supabase Auth with persistent browser sessions. Enable Email authentication and configure the Google provider in the Supabase dashboard. Add your local and production application URLs to Supabase Auth redirect URLs (for example, `http://localhost:5173/**`) so OAuth confirmation and password-reset links can return to the dedicated `#login` and `#profile` routes.
+
+## Profile Storage Setup
+
+Apply the storage migration in [supabase/migrations/20260729010000_storage_buckets.sql](./supabase/migrations/20260729010000_storage_buckets.sql). It creates the public `product-images`, `lookbook`, and `brand-assets` buckets, preserves the existing `profile-avatars` name, and installs the Storage policies used by the storefront.

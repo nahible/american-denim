@@ -1,0 +1,115 @@
+import { supabase, isSupabaseConfigured } from '../lib/supabase.js'
+import type { FilterValue, ListQueryOptions, SingleQueryOptions } from '../types/index.js'
+
+function toError(error: unknown) {
+  if (!error) {
+    return null
+  }
+
+  if (error instanceof Error) {
+    return error
+  }
+
+  if (typeof error === 'object' && error !== null && 'message' in error && typeof error.message === 'string') {
+    return new Error(error.message)
+  }
+
+  return new Error('Supabase request failed.')
+}
+
+function applyFilters(query: any, filters: Record<string, FilterValue> = {}) {
+  return Object.entries(filters).reduce((accumulator, [key, value]) => {
+    if (value === undefined) {
+      return accumulator
+    }
+
+    if (Array.isArray(value)) {
+      return accumulator.in(key, value)
+    }
+
+    if (value === null) {
+      return accumulator.is(key, null)
+    }
+
+    return accumulator.eq(key, value)
+  }, query)
+}
+
+function getClient() {
+  if (!isSupabaseConfigured || !supabase) {
+    throw new Error('Supabase is not configured.')
+  }
+
+  return supabase
+}
+
+export function createTableService<TRecord, TInsert = Partial<TRecord>, TUpdate = Partial<TInsert>>(tableName: string) {
+  return {
+    async list(options: ListQueryOptions = {}) {
+      try {
+        const client = getClient()
+        const { select = '*' } = options
+        let query = client.from(tableName).select(select)
+        query = applyFilters(query, options.filters)
+
+        if (options.orderBy) {
+          query = query.order(options.orderBy, { ascending: options.ascending ?? true })
+        }
+
+        if (typeof options.limit === 'number') {
+          query = query.limit(options.limit)
+        }
+
+        if (options.range) {
+          query = query.range(options.range.from, options.range.to)
+        }
+
+        const { data, error } = await query
+        return { data: data as TRecord[] | null, error: toError(error) }
+      } catch (error) {
+        return { data: null, error: toError(error) }
+      }
+    },
+
+    async getById(id: string, options: SingleQueryOptions = {}) {
+      try {
+        const client = getClient()
+        const { select = '*' } = options
+        const { data, error } = await client.from(tableName).select(select).eq('id', id).maybeSingle()
+        return { data: data as TRecord | null, error: toError(error) }
+      } catch (error) {
+        return { data: null, error: toError(error) }
+      }
+    },
+
+    async create(payload: TInsert) {
+      try {
+        const client = getClient()
+        const { data, error } = await client.from(tableName).insert(payload as any).select('*').single()
+        return { data: data as TRecord | null, error: toError(error) }
+      } catch (error) {
+        return { data: null, error: toError(error) }
+      }
+    },
+
+    async update(id: string, payload: TUpdate) {
+      try {
+        const client = getClient()
+        const { data, error } = await client.from(tableName).update(payload as any).eq('id', id).select('*').single()
+        return { data: data as TRecord | null, error: toError(error) }
+      } catch (error) {
+        return { data: null, error: toError(error) }
+      }
+    },
+
+    async remove(id: string) {
+      try {
+        const client = getClient()
+        const { data, error } = await client.from(tableName).delete().eq('id', id).select('*').maybeSingle()
+        return { data: data as TRecord | null, error: toError(error) }
+      } catch (error) {
+        return { data: null, error: toError(error) }
+      }
+    },
+  }
+}
