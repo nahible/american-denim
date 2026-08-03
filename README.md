@@ -28,3 +28,13 @@ Authentication uses Supabase Auth with persistent browser sessions. Enable Email
 ## Profile Storage Setup
 
 Apply the storage migration in [supabase/migrations/20260729010000_storage_buckets.sql](./supabase/migrations/20260729010000_storage_buckets.sql). It creates the public `product-images`, `lookbook`, and `brand-assets` buckets, preserves the existing `profile-avatars` name, and installs the Storage policies used by the storefront.
+
+## Stripe webhooks
+
+Apply the migrations, then deploy `stripe-webhook`. Configure `STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET`, and `SITE_URL` as Supabase Edge Function secrets (never as `VITE_` variables). In Stripe, create an endpoint at:
+
+```
+https://<project-ref>.supabase.co/functions/v1/stripe-webhook
+```
+
+Subscribe it only to `checkout.session.completed`, `checkout.session.expired`, and `payment_intent.payment_failed`. The function is intentionally configured without JWT verification because Stripe authenticates the raw request using `STRIPE_WEBHOOK_SECRET`.

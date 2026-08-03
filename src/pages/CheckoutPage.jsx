@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect } from 'react'
 import { CatalogState, CheckoutForm, PageHero, SectionHeading } from '../components/index.js'
 import { useAuth } from '../hooks/useAuth.js'
 import { useCart } from '../hooks/useCart.js'
@@ -7,8 +7,7 @@ import { rememberAuthRedirect } from '../utils/authRedirect.js'
 
 export function CheckoutPage() {
   const { user, loading: authLoading } = useAuth()
-  const { items, subtotal, loading, clearCart, reconcileItems } = useCart()
-  const [submittedOrder, setSubmittedOrder] = useState(null)
+  const { items, subtotal, loading, reconcileItems } = useCart()
 
   useEffect(() => {
     if (!authLoading && !user) {
@@ -36,37 +35,12 @@ export function CheckoutPage() {
     )
   }
 
-  if (submittedOrder) {
-    return (
-      <>
-        <PageHero
-          eyebrow="Checkout / Order request"
-          title="Your request is saved."
-          description="We have your order details and will follow up with next steps."
-          ctaLabel="Continue shopping"
-          ctaHref="#shop"
-          ctaSecondaryLabel="View your orders"
-          ctaSecondaryHref="#orders"
-        />
-        <section className="section">
-          <CatalogState
-            eyebrow="Order request"
-            title={`Order ${submittedOrder.id.slice(0, 8)} is saved.`}
-          description="Your details have been recorded. Our team will follow up with next steps before fulfillment."
-            actionLabel="Back to shop"
-            onAction={() => { window.location.hash = '#shop' }}
-          />
-        </section>
-      </>
-    )
-  }
-
   return (
     <>
       <PageHero
         eyebrow="Checkout"
-        title="Finish the details."
-        description="Add your contact and delivery details to send an order request to our team."
+        title="Secure payment, ready when you are."
+        description="Review your order, then complete card payment and shipping details securely with Stripe."
         ctaLabel="Back to cart"
         ctaHref="#cart"
         ctaSecondaryLabel="Keep shopping"
@@ -74,7 +48,7 @@ export function CheckoutPage() {
       />
 
       <section className="section cart">
-        <SectionHeading title="Checkout" description="Review your order and send through the details we need to follow up." />
+        <SectionHeading title="Checkout" description="Review your order, then continue to Stripe for secure payment and shipping details." />
         {loading ? (
           <p className="catalog-results" role="status">Loading your cart...</p>
         ) : items.length === 0 ? (
@@ -107,9 +81,7 @@ export function CheckoutPage() {
               <CheckoutForm
                 user={user}
                 items={items}
-                clearCart={clearCart}
                 onValidationError={reconcileItems}
-                onOrderSubmitted={setSubmittedOrder}
               />
             </div>
           </div>

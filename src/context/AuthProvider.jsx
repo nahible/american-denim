@@ -72,15 +72,21 @@ export function AuthProvider({ children }) {
   }, [])
 
   const signInWithGoogle = useCallback(async () => {
-    if (!supabase) {
-      return { data: null, error: configurationError() }
-    }
+  console.log('Google auth runtime check:', {
+    supabaseExists: Boolean(supabase),
+    authExists: Boolean(supabase?.auth),
+    currentUrl: window.location.href,
+  })
 
-    return supabase.auth.signInWithOAuth({
-      provider: 'google',
-      options: { redirectTo: getRedirectUrl() },
-    })
-  }, [])
+  if (!supabase) {
+    return { data: null, error: configurationError() }
+  }
+
+  return supabase.auth.signInWithOAuth({
+    provider: 'google',
+    options: { redirectTo: getRedirectUrl() },
+  })
+}, [])
 
   const signInWithPassword = useCallback(async ({ email, password }) => {
     if (!supabase) {
