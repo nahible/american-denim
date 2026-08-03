@@ -80,6 +80,7 @@ export const pageTitles = {
   signup: 'americandrm | sign up',
   profile: 'americandrm | profile',
   orders: 'americandrm | orders',
+  'payment-success': 'americandrm | payment received',
   '404': 'americandrm | page not found',
   product: 'americandrm | product',
 }

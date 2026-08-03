@@ -59,7 +59,7 @@ Deno.serve(async (request) => {
   const supabaseUrl = Deno.env.get('SUPABASE_URL')
   const serviceRoleKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')
   const stripeSecretKey = Deno.env.get('STRIPE_SECRET_KEY')
-  const siteUrl = Deno.env.get('SITE_URL')?.replace(/\/$/, '')
+  const siteUrl = Deno.env.get('SITE_URL')?.replace(/\/+$/, '')
   if (!supabaseUrl || !serviceRoleKey || !stripeSecretKey || !siteUrl) {
     return errorResponse('SERVER_CONFIGURATION', 'Checkout is not configured.', {}, 500)
   }
@@ -176,8 +176,8 @@ Deno.serve(async (request) => {
       customer_email: authData.user.email ?? undefined,
       shipping_address_collection: { allowed_countries: ['US'] },
       automatic_tax: { enabled: false },
-      success_url: `${siteUrl}/#checkout?session_id={CHECKOUT_SESSION_ID}`,
-      cancel_url: `${siteUrl}/#checkout`,
+      success_url: `${siteUrl}/#payment-success?session_id={CHECKOUT_SESSION_ID}`,
+      cancel_url: `${siteUrl}/#cart`,
       line_items: lineItems,
       metadata: checkoutMetadata,
       payment_intent_data: { metadata: checkoutMetadata },

@@ -13,6 +13,7 @@ import {
   LookbookPage,
   NotFoundPage,
   OrdersPage,
+  PaymentSuccessPage,
   ProductDetailsPage,
   ProfilePage,
   ShopPage,
@@ -74,6 +75,7 @@ function App() {
               {route.page === 'signup' && <SignupPage />}
               {route.page === 'profile' && <ProfilePage />}
               {route.page === 'orders' && <OrdersPage />}
+              {route.page === 'payment-success' && <PaymentSuccessPage sessionId={route.sessionId} />}
               {route.page === 'product' && <ProductDetailsPage productId={route.productId} />}
               {route.page === '404' && <NotFoundPage />}
             </main>
