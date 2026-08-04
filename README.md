@@ -1,330 +1,142 @@
-# americandrm
+# American Denim | americandrm
 
-`americandrm` is a small-batch apparel storefront built as a client-side React application. It presents the collection, loads a Supabase-backed catalog, supports email and Google sign-in, keeps a guest or account cart, and sends authenticated customers to Stripe Checkout for card payment and US shipping collection.
+**americandrm** is an independent, editorial-style e-commerce website for a small-batch apparel brand. It pairs a warm, tactile storefront experience with a modern commerce foundation for product discovery, customer accounts, cart persistence, and secure payments.
 
-The checkout path is deliberately server-validated: the browser sends only variant IDs and quantities. Supabase Edge Functions retrieve current product data, validate availability and pricing, create the Stripe session, and use a signed Stripe webhook to finalize paid orders.
+The site is a single-page web application with hash-based navigation, allowing every storefront and account experience to live in one responsive client application.
 
-## Contents
-
-- [Stack](#stack)
-- [Capabilities](#capabilities)
-- [Project layout](#project-layout)
-- [Prerequisites](#prerequisites)
-- [Run locally](#run-locally)
-- [Configuration](#configuration)
-- [Set up Supabase](#set-up-supabase)
-- [Set up Stripe Checkout](#set-up-stripe-checkout)
-- [How checkout works](#how-checkout-works)
-- [Routes](#routes)
-- [Data model and access](#data-model-and-access)
-- [Quality checks](#quality-checks)
-- [Deployment](#deployment)
-- [Development notes](#development-notes)
-- [Troubleshooting](#troubleshooting)
-
-## Stack
+## Technology stack
 
 | Area | Technology |
 | --- | --- |
-| UI | React 19, React DOM, CSS |
-| Build and local server | Vite 8 |
-| Data, auth, storage, server functions | Supabase |
+| Frontend | React 19 and React DOM |
+| Build tooling | Vite 8 |
+| Styling | Custom CSS |
+| Backend platform | Supabase |
+| Authentication | Supabase Auth (email/password and Google OAuth) |
+| Database | Supabase Postgres with Row Level Security |
+| Media storage | Supabase Storage |
 | Payments | Stripe Checkout and Stripe webhooks |
-| Type checking and linting | TypeScript and ESLint |
+| Server-side logic | Supabase Edge Functions (Deno/TypeScript) |
+| Code quality | ESLint and TypeScript checking |
 
-The browser app is JavaScript/JSX. Shared database types and several data services are TypeScript; the included TypeScript configuration checks both the typed code and eligible JavaScript without emitting files.
+## Website experience
 
-## Capabilities
+The storefront is designed around an elevated, editorial shopping flow:
 
-- Responsive editorial storefront with home, collection, brand, lookbook, contact, and product-detail views.
-- Catalog sourced from `products`, `product_images`, and `product_variants` in Supabase.
-- Variant-aware product details, stock-aware cart quantities, related-product selection, and price formatting.
-- Guest cart persisted in `localStorage`, which merges into the account cart after sign-in.
-- Supabase Auth with email/password registration, sign-in, password recovery, persistent sessions, and Google OAuth.
-- Customer profile details, profile-picture upload, and order history.
-- Public media buckets for catalog/editorial assets plus a user-owned avatar bucket.
-- Authenticated Stripe Checkout for cards and US shipping addresses.
-- Server-side cart validation, inventory reservation, trusted checkout references, signed webhook handling, and idempotent paid-order creation.
+- Brand-led home, story, about, lookbook, and contact pages.
+- A product catalog with product imagery, prices, variant selections, availability, and related products.
+- Product-detail pages for choosing color/size variants and adding them to the cart.
+- A guest cart that remains available in the browser, plus a synchronized cart for signed-in customers.
+- Customer sign-up, sign-in, password recovery, Google login, profile editing, and profile-picture uploads.
+- Protected customer profile and order-history views.
+- Stripe-hosted checkout for secure card payments and US shipping-address collection.
 
-## Project layout
+## Project organization
 
 ```text
 .
 ├── src/
-│   ├── components/       # Reusable UI, cart, checkout, navigation, and loading states
-│   ├── context/          # App, authentication, and cart providers
-│   ├── hooks/            # Data and interaction hooks
-│   ├── pages/            # Hash-routed storefront and account screens
-│   ├── services/         # Supabase table, catalog, profile, and checkout access
-│   ├── types/            # Database and catalog type definitions
-│   └── utils/            # Hash routing and auth-return helpers
+│   ├── components/       # Shared interface elements and commerce UI
+│   ├── constants/        # Brand content, navigation, database table names
+│   ├── context/          # Application, authentication, and cart state
+│   ├── hooks/            # Reusable data-loading and UI behavior hooks
+│   ├── lib/              # Supabase client and document helpers
+│   ├── pages/            # Storefront, account, cart, and checkout screens
+│   ├── services/         # Catalog, profile, storage, cart, and checkout access
+│   ├── types/            # Shared, catalog, and database TypeScript types
+│   └── utils/            # Hash routing and authentication return handling
 ├── supabase/
-│   ├── migrations/       # Database schema, RLS, storage, and checkout SQL
-│   └── functions/        # Deno Edge Functions
-├── .env.example          # Safe browser-environment template
-├── package.json          # App scripts and dependencies
-└── vite.config.js
+│   ├── migrations/       # Database schema, policies, storage, and payment SQL
+│   └── functions/        # Secure Stripe and order Edge Functions
+├── public/               # Static web assets
+└── package.json          # Project dependencies and scripts
 ```
 
-## Prerequisites
+## Frontend architecture
 
-- A current, supported Node.js release compatible with Vite 8.
-- npm (included with Node.js).
-- A Supabase project and the Supabase CLI to apply migrations and deploy Edge Functions.
-- A Stripe account for checkout/payment functionality.
+The UI is built from focused React pages and shared components.
 
-## Run locally
+- `pages/` contains full views such as the home page, shop, product details, cart, checkout, login, profile, and orders.
+- `components/` contains reusable visual building blocks including navigation, product cards, cart items, page heroes, buttons, form elements, loading skeletons, and footer content.
+- `context/` holds global state. `AuthProvider` tracks the active Supabase session, while `CartProvider` manages guest-cart storage, account-cart synchronization, quantities, totals, and cart reconciliation.
+- `hooks/` separates page behavior from presentation. Examples include hash-route handling, catalog/product queries, featured-product loading, account data, and interaction helpers.
+- `services/` is the data boundary between React and Supabase. It centralizes reads and writes for products, variants, images, customers, orders, storage, and checkout requests.
 
-1. Install dependencies:
+## Navigation
 
-   ```bash
-   npm install
-   ```
+The website uses hash-based routes, keeping navigation self-contained in the client application.
 
-2. Copy the environment template to a local file. PowerShell example:
-
-   ```powershell
-   Copy-Item .env.example .env.local
-   ```
-
-3. Fill in the browser variables described in [Configuration](#configuration).
-
-4. Start the Vite dev server:
-
-   ```bash
-   npm run dev
-   ```
-
-5. Open the local address Vite prints (normally `http://localhost:5173`).
-
-The app will render its static shell without Supabase credentials, but catalog, authentication, account, storage, persisted-cart, and checkout features require a configured backend.
-
-## Configuration
-
-### Browser environment variables
-
-Create `.env.local` (or `.env`) from `.env.example`:
-
-```env
-VITE_SUPABASE_URL=https://your-project-ref.supabase.co
-VITE_SUPABASE_ANON_KEY=your-anon-or-publishable-key
-```
-
-`VITE_` values are embedded in the client bundle. Only use Supabase's browser-safe anon/publishable key here—never place a service-role key or Stripe secret in a Vite variable.
-
-### Edge Function secrets
-
-Set these as Supabase Edge Function secrets, not in the frontend environment:
-
-| Secret | Used by | Purpose |
-| --- | --- | --- |
-| `STRIPE_SECRET_KEY` | `create-checkout-session`, `stripe-webhook` | Calls Stripe's server API. |
-| `STRIPE_WEBHOOK_SECRET` | `stripe-webhook` | Verifies Stripe's signed raw webhook payload. |
-| `SITE_URL` | `create-checkout-session` | Absolute storefront URL for Stripe success/cancel redirects. |
-
-Supabase automatically provides `SUPABASE_URL` and `SUPABASE_SERVICE_ROLE_KEY` to deployed Edge Functions. The service-role key must remain server-only.
-
-## Set up Supabase
-
-### 1. Link the project and apply migrations
-
-Authenticate and link the local repository to the intended Supabase project, then push the versioned migrations:
-
-```bash
-supabase login
-supabase link --project-ref <your-project-ref>
-supabase db push
-```
-
-The migrations are ordered by filename and should be applied in that order. They create the following foundations:
-
-- customer-facing `profiles` and compatibility `users` records, kept in sync with `auth.users`;
-- product, image, variant, cart, order, and order-item records;
-- RLS policies for public catalog reads and customer-owned account/cart/order data;
-- the `profile-avatars`, `product-images`, `lookbook`, and `brand-assets` Storage buckets;
-- secure SQL functions used for checkout availability validation, inventory reservation, and paid-order finalization;
-- `stripe_checkout_attempts`, which stores server-trusted checkout inputs and payment lifecycle state.
-
-The frontend currently writes serialized account-cart items to the compatibility `public.cart` table. The normalized `carts` and `cart_items` tables are also present for a future migration.
-
-### 2. Configure authentication
-
-In **Supabase Dashboard → Authentication**:
-
-1. Enable Email authentication.
-2. Add `http://localhost:5173/**` to redirect URLs for local development.
-3. Add your deployed site's equivalent URL pattern for production.
-4. If using Google sign-in, enable and configure the Google provider, then add the provider redirect URL Supabase supplies to Google Cloud.
-
-The app processes Supabase callback parameters in the hash and returns successful sign-ins to the intended page (or the profile page). Password recovery redirects to `#login` and then opens the profile flow to set a new password.
-
-### 3. Add catalog content
-
-Create active products in `public.products`, then add at least one corresponding record in both `public.product_variants` and `public.product_images`.
-
-Important catalog fields:
-
-| Table | Fields used by the storefront |
+| Route | Experience |
 | --- | --- |
-| `products` | `id`, `name`, `slug`, `description`, `status`, `featured`, `metadata` |
-| `product_variants` | `id`, `product_id`, `name`, `price`, `currency`, `color`, `size`, `stock_quantity` |
-| `product_images` | `product_id`, `url`, `alt_text`, `sort_order` |
+| `#` | Homepage |
+| `#shop` | Product catalog |
+| `#product/<product-id>` | Individual product detail |
+| `#story`, `#about`, `#lookbook`, `#contact` | Brand and editorial content |
+| `#cart` | Shopping cart |
+| `#checkout` | Authenticated payment handoff |
+| `#login`, `#signup` | Customer authentication |
+| `#profile`, `#orders` | Customer account area |
+| `#payment-success` | Post-payment confirmation |
 
-Only products whose `status` is `active` are publicly readable. Product URLs use the database product ID (`#product/<id>`); `slug` is available for catalog management but is not the route key today. Place public catalog imagery in the `product-images` bucket (or use another publicly accessible URL) and store the final asset URL in `product_images.url`.
+## Commerce architecture
 
-## Set up Stripe Checkout
+Supabase is the system of record for catalog, customer, cart, and order data.
 
-### 1. Deploy the functions
+| Data area | Purpose |
+| --- | --- |
+| `products` | Product identity, descriptions, publication state, and editorial metadata |
+| `product_variants` | Variant names, SKU data, price, currency, color, size, and inventory |
+| `product_images` | Product imagery, alt text, and display order |
+| `profiles` / `users` | Customer-facing profile data associated with Supabase Auth users |
+| `cart` | The current serialized cart for signed-in customers |
+| `orders` / `order_items` | Customer orders and immutable line-item snapshots |
+| `stripe_checkout_attempts` | Trusted checkout references and payment lifecycle state |
 
-```bash
-supabase functions deploy create-checkout-session
-supabase functions deploy stripe-webhook --no-verify-jwt
-```
+The catalog is publicly readable, while customer data is protected with Supabase Row Level Security. Customers can access only their own profile, cart, orders, and order items. Catalog and editorial images are served from public Storage buckets; profile photos are organized under each customer's own storage path.
 
-`stripe-webhook` must not require a Supabase JWT because Stripe, rather than a signed-in customer, calls it. It authenticates each request using the `Stripe-Signature` header and `STRIPE_WEBHOOK_SECRET`. The repository's `supabase/config.toml` records this setting.
+## Cart and account behavior
 
-`create-order` is also included as a secured, authenticated order-creation function for integrations that need it; the current storefront checkout uses `create-checkout-session` and the webhook path instead.
+Guests can add products to a browser-persisted cart before creating an account. When a customer signs in, guest items are merged into their account cart and stored in Supabase for continuity across sessions.
 
-### 2. Set production or test secrets
+The cart is variant-aware and respects known stock levels. Checkout validation can reconcile a cart if a selected variant is no longer available, has a new price, or has less inventory than the requested quantity.
 
-```bash
-supabase secrets set STRIPE_SECRET_KEY=sk_test_...
-supabase secrets set STRIPE_WEBHOOK_SECRET=whsec_...
-supabase secrets set SITE_URL=http://localhost:5173
-```
+## Payments and order integrity
 
-For a deployed environment, change `SITE_URL` to the exact public origin, without a trailing slash. Use matching Stripe test or live keys; do not mix modes.
-
-### 3. Register the webhook endpoint
-
-In Stripe, create an endpoint at:
+Payments are handled through Stripe Checkout rather than through the website directly. This keeps sensitive card entry in Stripe's hosted experience.
 
 ```text
-https://<your-project-ref>.supabase.co/functions/v1/stripe-webhook
+Customer cart
+  → authenticated checkout request
+  → Supabase validates current products, prices, and inventory
+  → Stripe Checkout collects payment
+  → Stripe webhook confirms the result
+  → Supabase creates the paid order and reserves inventory
 ```
 
-Subscribe to exactly these events:
+The browser submits only the selected variant IDs and quantities. Product prices, availability, and order totals are checked server-side against the current database before a payment session is created. After payment, a signed Stripe webhook drives order finalization rather than relying on a customer-facing redirect.
 
-- `checkout.session.completed`
-- `checkout.session.expired`
-- `payment_intent.payment_failed`
+This flow protects against client-side price manipulation, stale product data, duplicate webhook delivery, and overselling during concurrent purchases.
 
-Copy the endpoint signing secret into `STRIPE_WEBHOOK_SECRET` and redeploy or update the function secret if required by your deployment workflow.
+## Backend services
 
-### 4. Test locally
+The `supabase/functions/` directory contains the server-side parts of commerce:
 
-For local end-to-end testing, run the frontend and forward Stripe test events to the deployed endpoint (or to a locally served function) using the Stripe CLI. Ensure `SITE_URL` points to the frontend origin that should receive the post-checkout redirect. Stripe test card `4242 4242 4242 4242` can be used with any future expiry date and CVC in test mode.
+- `create-checkout-session` authenticates the customer, validates the selected items, records a trusted checkout reference, and creates a Stripe Checkout session.
+- `stripe-webhook` verifies Stripe's signed events, records expired or failed payment states, and finalizes successful payments.
+- `create-order` provides a secured order-creation path for server-side or future integrations.
 
-## How checkout works
+Database functions support those flows by validating checkout items, atomically reserving inventory, creating historical order records, and making payment finalization idempotent.
 
-```text
-Customer
-  │ chooses a variant and quantity
-  ▼
-React cart ── guest localStorage or signed-in public.cart
-  │ authenticated checkout request: variant IDs + quantities only
-  ▼
-create-checkout-session Edge Function
-  │ verifies Supabase access token
-  │ calls validate_checkout_items for current price/stock/currency
-  │ writes trusted stripe_checkout_attempts reference
-  ▼
-Stripe Checkout ── collects payment and US shipping address
-  │ signed event
-  ▼
-stripe-webhook Edge Function
-  │ verifies Stripe signature and retrieves canonical Stripe objects
-  ▼
-finalize_paid_stripe_checkout SQL function
-  │ idempotently creates order snapshots and atomically reserves inventory
-  ▼
-orders + order_items (status: paid)
-```
+## Design and content system
 
-This design means neither product prices nor totals from the browser or webhook payload are trusted for order creation. The current database data is re-validated before Stripe receives line items, and finalization uses the stored trusted checkout reference. The finalization function also serializes work per Stripe session so retry delivery does not create duplicate paid orders.
+Brand content and navigation labels live in `src/constants/siteContent.js`, keeping recurring editorial copy separate from UI components. Product and lookbook media are managed through Supabase Storage, while product content is database-driven rather than hard-coded into the site.
 
-The payment success screen confirms the redirect and links to order history. A redirect alone is not proof that an order was finalized; the Stripe webhook is the authoritative payment confirmation.
+The interface uses custom CSS, reusable page primitives, responsive layouts, semantic landmarks, a skip-to-content link, and loading states for data-backed catalog surfaces.
 
-## Routes
+## Security model
 
-The app is a hash-routed single-page application, so static hosts do not need rewrite rules for routes.
-
-| Route | View |
-| --- | --- |
-| `#` | Home |
-| `#shop` | Collection/catalog |
-| `#product/<product-id>` | Product details |
-| `#story`, `#about`, `#lookbook`, `#contact` | Brand/editorial pages |
-| `#cart` | Cart |
-| `#checkout` | Authenticated checkout handoff |
-| `#login`, `#signup` | Authentication |
-| `#profile`, `#orders` | Protected customer account areas |
-| `#payment-success?session_id=<stripe-session-id>` | Post-Stripe confirmation |
-
-Unknown routes resolve to the not-found screen. Checkout, profile, and orders redirect unauthenticated visitors to login, preserving the intended destination where applicable.
-
-## Data model and access
-
-All application tables use Row Level Security. The core access model is:
-
-- anyone can read active products, images, and variants;
-- signed-in users can read and update only their own profile and persisted cart;
-- signed-in users can read only their own orders and order items;
-- client roles have no access to `stripe_checkout_attempts`;
-- only Edge Functions using the service role can run the pricing, order-creation, and payment-finalization database functions.
-
-Storage follows the same separation: catalog/editorial buckets are publicly readable but not writable by storefront clients; profile images are public for display, while upload/update/delete is scoped to the signed-in user's folder. Avatar uploads are capped at 5 MB; storefront media buckets allow up to 10 MB for their configured image types.
-
-## Quality checks
-
-| Command | Purpose |
-| --- | --- |
-| `npm run dev` | Start the Vite development server. |
-| `npm run build` | Create an optimized production bundle in `dist/`. |
-| `npm run preview` | Serve the built bundle locally. |
-| `npm run lint` | Run ESLint across the project. |
-| `npm run typecheck` | Run TypeScript with `--noEmit`. |
-
-Before merging or deploying, run:
-
-```bash
-npm run lint
-npm run typecheck
-npm run build
-```
-
-## Deployment
-
-1. Configure `VITE_SUPABASE_URL` and `VITE_SUPABASE_ANON_KEY` in your frontend host's build environment.
-2. Run the quality checks and deploy the Vite build output (`dist/`) to a static host.
-3. Add the production URL to Supabase Auth redirect URLs and Google OAuth configuration, if enabled.
-4. Apply Supabase migrations with `supabase db push`.
-5. Deploy `create-checkout-session` and `stripe-webhook`, then configure their secrets.
-6. Set Stripe's webhook endpoint to the deployed Supabase function and subscribe to the three required events.
-7. Add catalog data and verify a complete Stripe test-mode purchase before switching to live keys.
-
-Because routing uses hashes, hosting the built static files at the site root is sufficient; direct requests never require server-side SPA route fallback.
-
-## Development notes
-
-- Keep product and image content in Supabase rather than hard-coding catalog inventory in components.
-- Keep payment secrets and the Supabase service-role key out of the browser, git history, and frontend-host public variables.
-- Database pricing and stock are the source of truth. Cart values are for display and are reconciled when checkout validation reports an unavailable variant, updated price, or limited stock.
-- The order tables store product/variant names and unit prices as historical line-item snapshots, so later catalog edits do not rewrite past order details.
-- `create-order` is separate from Stripe Checkout. Do not invoke it from a payment-success redirect when using the Stripe flow; final order creation is webhook-driven to avoid treating an unverified client redirect as a successful payment.
-
-## Troubleshooting
-
-| Symptom | Likely cause and resolution |
-| --- | --- |
-| “Supabase is not configured” | Set both browser variables in `.env.local`, then restart Vite. |
-| No products appear | Apply migrations, add active products with variants and images, and confirm the anon key points to the same Supabase project. |
-| Google or password-reset return goes to the wrong page | Add the exact local/production application URL patterns to Supabase Auth redirect URLs. |
-| Checkout redirects to login | Sign in first; the checkout function requires a valid Supabase user token. |
-| Checkout cannot start | Confirm the Edge Function is deployed and has `STRIPE_SECRET_KEY` and `SITE_URL`; ensure every cart item has a valid in-stock variant. |
-| Paid checkout has no order | Check Stripe webhook deliveries, verify the endpoint subscription/events and `STRIPE_WEBHOOK_SECRET`, then inspect Supabase Edge Function logs. |
-| Stripe webhook returns 401 | Deploy `stripe-webhook` with JWT verification disabled and keep signature verification enabled through the webhook secret. |
-
-## Security
-
-The frontend's Supabase anon/publishable key is expected to be public; its access is constrained by RLS. Treat `STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET`, and `SUPABASE_SERVICE_ROLE_KEY` as confidential server credentials. Rotate a secret immediately if it is exposed, and never add it to `.env.example` or a committed `.env` file.
+- Supabase Auth manages customer identity and session persistence.
+- Row Level Security scopes personal data to the authenticated customer who owns it.
+- Supabase service-role access is limited to Edge Functions and never exposed to the browser.
+- Stripe's webhook signing secret verifies that payment events originate from Stripe.
+- Server-side validation treats the database—not browser cart values—as the source of truth for price, stock, and order creation.
