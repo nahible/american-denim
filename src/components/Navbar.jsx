@@ -1,8 +1,10 @@
 import { navLinks, navMenuItems } from '../constants/index.js'
 import { BrandMark } from './BrandMark.jsx'
 import { SvgIcon } from './SvgIcon.jsx'
+import { useAuth } from '../hooks/useAuth.js'
 
 export function Navbar({ page, menuOpen, setMenuOpen, navigate, menuRef }) {
+  const { isAdmin } = useAuth()
   const activePage = page === 'home' ? 'home' : page
   const focusCatalogSearch = (event) => {
     navigate('#shop')(event)
@@ -81,6 +83,11 @@ export function Navbar({ page, menuOpen, setMenuOpen, navigate, menuRef }) {
                   <span>{item.label}</span>
                 </a>
               ))}
+              {isAdmin && (
+                <a href="#admin" onClick={navigate('#admin')} aria-current={page.startsWith('admin') ? 'page' : undefined}>
+                  <span>Admin</span>
+                </a>
+              )}
             </div>
           )}
         </div>

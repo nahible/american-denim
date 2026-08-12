@@ -178,6 +178,7 @@ Deno.serve(async (request) => {
       automatic_tax: { enabled: false },
       success_url: `${siteUrl}/#payment-success?session_id={CHECKOUT_SESSION_ID}`,
       cancel_url: `${siteUrl}/#cart`,
+      allow_promotion_codes: true,
       line_items: lineItems,
       metadata: checkoutMetadata,
       payment_intent_data: { metadata: checkoutMetadata },

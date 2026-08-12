@@ -75,21 +75,29 @@ export async function fetchUserProfile(authUser) {
     }
   }
 
-  const [profileResponse, ordersResponse] = await Promise.all([
+  const [profileResponse, ordersResponse, refundsResponse] = await Promise.all([
     getOrCreateUserRecord(authUser),
     listOrders({
-      select: 'id, status, subtotal, total, currency, created_at',
+      select: 'id, status, payment_status, fulfillment_status, carrier, tracking_number, shipped_at, delivered_at, refunded_amount_cents, subtotal, total, currency, created_at',
       filters: { user_id: authUser.id },
       orderBy: 'created_at',
       ascending: false,
     }),
+    supabase ? supabase.rpc('customer_order_refunds') : Promise.resolve({ data: [], error: configurationError() }),
   ])
+
+  const refundsByOrder = new Map()
+  for (const refund of refundsResponse.data ?? []) {
+    const orderRefunds = refundsByOrder.get(refund.order_id) ?? []
+    orderRefunds.push(refund)
+    refundsByOrder.set(refund.order_id, orderRefunds)
+  }
 
   return {
     profile: buildProfile(authUser, profileResponse.data),
-    orders: ordersResponse.data ?? [],
+    orders: (ordersResponse.data ?? []).map((order) => ({ ...order, refunds: refundsByOrder.get(order.id) ?? [] })),
     profileError: profileResponse.error,
-    ordersError: ordersResponse.error,
+    ordersError: ordersResponse.error || refundsResponse.error,
   }
 }
 

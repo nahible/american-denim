@@ -5,6 +5,7 @@ import { CartProvider } from './context/CartProvider.jsx'
 import { Footer, Navbar } from './components/index.js'
 import {
   AboutPage,
+  AdminPage,
   CartPage,
   CheckoutPage,
   ContactPage,
@@ -77,6 +78,7 @@ function App() {
               {route.page === 'orders' && <OrdersPage />}
               {route.page === 'payment-success' && <PaymentSuccessPage sessionId={route.sessionId} />}
               {route.page === 'product' && <ProductDetailsPage productId={route.productId} />}
+              {route.page.startsWith('admin') && <AdminPage page={route.page} id={route.id} />}
               {route.page === '404' && <NotFoundPage />}
             </main>
 

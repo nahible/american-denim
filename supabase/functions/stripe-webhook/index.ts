@@ -68,6 +68,36 @@ Deno.serve(async (request) => {
 
   const adminClient = createClient(supabaseUrl, serviceRoleKey, { auth: { persistSession: false } })
 
+  const reconcileRefund = async (incoming: Stripe.Refund) => {
+    const verified = await stripe.refunds.retrieve(incoming.id)
+    const paymentIntentId = stripeId(verified.payment_intent)
+    if (!paymentIntentId) return
+    const { data: order, error: orderError } = await adminClient
+      .from('orders')
+      .select('id')
+      .eq('stripe_payment_intent', paymentIntentId)
+      .maybeSingle()
+    if (orderError || !order) {
+      console.error('Refund does not match a known order', { refundId: verified.id, paymentIntentId, orderError })
+      return
+    }
+    const rawStatus = String(verified.status || 'pending')
+    const status = ['succeeded', 'failed', 'canceled'].includes(rawStatus) ? rawStatus : 'pending'
+    const failureReason = typeof (verified as Stripe.Refund & { failure_reason?: string }).failure_reason === 'string'
+      ? (verified as Stripe.Refund & { failure_reason?: string }).failure_reason
+      : null
+    const { error } = await adminClient.rpc('record_stripe_refund_event', {
+      p_order_id: order.id,
+      p_stripe_refund_id: verified.id,
+      p_amount_cents: verified.amount,
+      p_currency: verified.currency,
+      p_status: status,
+      p_failure_reason: failureReason,
+      p_refund_record_id: isUuid(verified.metadata?.refund_record_id) ? verified.metadata.refund_record_id : null,
+    })
+    if (error) throw error
+  }
+
   try {
     switch (event.type) {
       case 'checkout.session.completed': {
@@ -79,7 +109,7 @@ Deno.serve(async (request) => {
 
         // Re-fetch the session from Stripe.  The event is signed, but this also
         // verifies that the Session is complete and its PaymentIntent succeeded.
-        const session = await stripe.checkout.sessions.retrieve(sessionId)
+        const session = await stripe.checkout.sessions.retrieve(sessionId, { expand: ['discounts'] })
         const paymentIntentId = stripeId(session.payment_intent)
         if (
           session.id !== sessionId ||
@@ -125,6 +155,46 @@ Deno.serve(async (request) => {
         if (error || !data || (data as { ok?: boolean }).ok !== true) {
           console.error('Unable to finalize paid Stripe checkout', { eventId: event.id, sessionId, error, data })
           return jsonResponse({ error: 'Order finalization failed' }, 500)
+        }
+
+        const finalizedOrderId = (data as { order?: { id?: string } }).order?.id
+        if (finalizedOrderId) {
+          const checkout = session as Stripe.Checkout.Session & {
+            collected_information?: { shipping_details?: unknown }
+            discounts?: Array<{ promotion_code?: string | { id: string } | null }>
+          }
+          const shippingDetails = checkout.collected_information?.shipping_details
+            ?? (checkout as Stripe.Checkout.Session & { shipping_details?: unknown }).shipping_details
+          const detailError = await adminClient.rpc('apply_stripe_checkout_details', {
+            p_order_id: finalizedOrderId,
+            p_subtotal_cents: session.amount_subtotal ?? session.amount_total ?? 0,
+            p_discount_cents: session.total_details?.amount_discount ?? 0,
+            p_shipping_cents: session.total_details?.amount_shipping ?? 0,
+            p_tax_cents: session.total_details?.amount_tax ?? 0,
+            p_total_cents: session.amount_total ?? 0,
+            p_metadata: {
+              contact: session.customer_details ?? {},
+              shipping_address: shippingDetails ?? {},
+              billing_address: session.customer_details?.address ?? {},
+            },
+          })
+          if (detailError.error) {
+            console.error('Unable to persist Stripe checkout totals', { eventId: event.id, error: detailError.error })
+            return jsonResponse({ error: 'Checkout detail reconciliation failed' }, 500)
+          }
+
+          const promotionId = stripeId(checkout.discounts?.[0]?.promotion_code ?? null)
+          if (promotionId) {
+            const { error: discountError } = await adminClient.rpc('record_discount_redemption', {
+              p_stripe_promotion_code_id: promotionId,
+              p_stripe_checkout_session_id: session.id,
+              p_stripe_event_id: event.id,
+            })
+            if (discountError) {
+              console.error('Unable to record discount redemption', { eventId: event.id, discountError })
+              return jsonResponse({ error: 'Discount reconciliation failed' }, 500)
+            }
+          }
         }
 
         console.info('Stripe checkout finalized', {
@@ -193,6 +263,19 @@ Deno.serve(async (request) => {
           return jsonResponse({ error: 'Payment failure update failed' }, 500)
         }
 
+        return jsonResponse({ received: true })
+      }
+
+      case 'refund.created':
+      case 'refund.updated':
+      case 'refund.failed': {
+        await reconcileRefund(event.data.object)
+        return jsonResponse({ received: true })
+      }
+
+      case 'charge.refunded': {
+        const charge = await stripe.charges.retrieve(event.data.object.id, { expand: ['refunds'] })
+        for (const refund of charge.refunds?.data ?? []) await reconcileRefund(refund)
         return jsonResponse({ received: true })
       }
 

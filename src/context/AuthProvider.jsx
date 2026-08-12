@@ -16,6 +16,7 @@ export function AuthProvider({ children }) {
   const [session, setSession] = useState(null)
   const [user, setUser] = useState(null)
   const [loading, setLoading] = useState(Boolean(supabase))
+  const [roleState, setRoleState] = useState({ userId: null, role: null, error: null })
   const [passwordRecovery, setPasswordRecovery] = useState(false)
 
   useEffect(() => {
@@ -70,6 +71,23 @@ export function AuthProvider({ children }) {
       listener.subscription.unsubscribe()
     }
   }, [])
+
+  useEffect(() => {
+    let active = true
+
+    if (!supabase || !user?.id) return undefined
+    void supabase
+      .from('user_roles')
+      .select('role')
+      .eq('user_id', user.id)
+      .maybeSingle()
+      .then(({ data, error }) => {
+        if (!active) return
+        setRoleState({ userId: user.id, role: data?.role ?? 'customer', error: error ?? null })
+      })
+
+    return () => { active = false }
+  }, [user?.id])
 
   const signInWithGoogle = useCallback(async () => {
   console.log('Google auth runtime check:', {
@@ -137,10 +155,15 @@ export function AuthProvider({ children }) {
     return supabase.auth.signOut()
   }, [])
 
+  const verifiedRole = roleState.userId === user?.id ? roleState.role : null
   const value = useMemo(() => ({
     session,
     user,
     loading,
+    role: verifiedRole,
+    roleLoading: Boolean(user) && roleState.userId !== user.id,
+    roleError: roleState.userId === user?.id ? roleState.error : null,
+    isAdmin: verifiedRole === 'admin',
     passwordRecovery,
     signInWithGoogle,
     signInWithPassword,
@@ -149,7 +172,7 @@ export function AuthProvider({ children }) {
     updatePassword,
     clearPasswordRecovery,
     signOut,
-  }), [session, user, loading, passwordRecovery, signInWithGoogle, signInWithPassword, signUp, sendPasswordReset, updatePassword, clearPasswordRecovery, signOut])
+  }), [session, user, loading, verifiedRole, roleState, passwordRecovery, signInWithGoogle, signInWithPassword, signUp, sendPasswordReset, updatePassword, clearPasswordRecovery, signOut])
 
   return (
     <AuthContext.Provider

@@ -303,14 +303,30 @@ function OrderHistory({ orders, error }) {
           ? new Date(order.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
           : 'Date pending'
 
+        const trackingNumber = typeof order.tracking_number === 'string' && /^[A-Za-z0-9 -]{6,40}$/.test(order.tracking_number)
+          ? order.tracking_number.trim()
+          : ''
+        const carrier = String(order.carrier || '').trim().toLowerCase()
+        const trackingBase = carrier === 'ups' ? 'https://www.ups.com/track?tracknum='
+          : carrier === 'fedex' ? 'https://www.fedex.com/fedextrack/?trknbr='
+            : carrier === 'usps' ? 'https://tools.usps.com/go/TrackConfirmAction?tLabels='
+              : ''
+
         return (
           <article className="account-order" key={order.id}>
             <div>
               <span className="eyebrow">Order {order.id.slice(0, 8)}</span>
               <p>{orderDate}</p>
+              <p>Payment: {String(order.payment_status || order.status || 'pending').replace(/_/g, ' ')}</p>
+              <p>Fulfillment: {String(order.fulfillment_status || 'unfulfilled').replace(/_/g, ' ')}</p>
+              {order.shipped_at && <p>Shipped {new Date(order.shipped_at).toLocaleDateString('en-US')}</p>}
+              {order.delivered_at && <p>Delivered {new Date(order.delivered_at).toLocaleDateString('en-US')}</p>}
+              {trackingNumber && <p>{order.carrier || 'Tracking'}: {trackingBase ? <a href={`${trackingBase}${encodeURIComponent(trackingNumber)}`} target="_blank" rel="noopener noreferrer">{trackingNumber}</a> : trackingNumber}</p>}
+              {Number(order.refunded_amount_cents || 0) > 0 && <p>Refunded: {formatPrice(Number(order.refunded_amount_cents) / 100, order.currency || 'USD')}</p>}
+              {order.refunds?.some((refund) => refund.status === 'pending') && <p>Refund pending confirmation</p>}
             </div>
             <div className="account-order__meta">
-              <span>{order.status || 'Processing'}</span>
+              <span>{order.fulfillment_status || 'Unfulfilled'}</span>
               <strong>{formatPrice(order.total ?? order.subtotal ?? 0, order.currency || 'USD')}</strong>
             </div>
           </article>

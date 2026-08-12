@@ -36,7 +36,9 @@ export function getRouteFromHash(hash) {
   }
 
   const [path, queryString = ''] = normalizedHash.split('?', 2)
-  const sessionId = new URLSearchParams(queryString).get('session_id')
+  const query = new URLSearchParams(queryString)
+  const sessionId = query.get('session_id')
+  const id = query.get('id')
 
   const pageRoutes = new Set([
     'shop',
@@ -51,11 +53,21 @@ export function getRouteFromHash(hash) {
     'profile',
     'orders',
     'payment-success',
+    'admin',
+    'admin-orders',
+    'admin-order',
+    'admin-products',
+    'admin-product',
+    'admin-inventory',
+    'admin-customers',
+    'admin-customer',
+    'admin-discounts',
+    'admin-analytics',
     '404',
   ])
 
   if (pageRoutes.has(path)) {
-    return { page: path, productId: null, sessionId }
+    return { page: path, productId: null, sessionId, id }
   }
 
   const productMatch = path.match(/^product\/(.+)$/)
